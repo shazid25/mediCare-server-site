@@ -49,6 +49,18 @@
 //       }
 //     });
 
+
+
+//     //seller API
+
+
+//     app.post('/medicine', async (req, res) => {
+//   const newMedicine = req.body;
+//   const result = await medicineCollection.insertOne(newMedicine);
+//   res.send(result);
+// });
+
+
 //     console.log('MongoDB connected successfully!');
 //   } finally {
 //     // client will stay connected
@@ -60,6 +72,11 @@
 // app.get('/', (req, res) => res.send('medicare server is running'));
 
 // app.listen(port, () => console.log(`Server running on port ${port}`));
+
+
+
+
+
 
 
 
@@ -113,6 +130,21 @@ async function run() {
         res.status(500).send({ message: 'Server error', error });
       }
     });
+
+
+
+    //seller API
+
+
+    app.post('/medicine', async (req, res) => {
+  const newMedicine = req.body;
+  const result = await medicineCollection.insertOne(newMedicine);
+  res.send(result);
+});
+
+
+
+
 
     console.log('MongoDB connected successfully!');
   } finally {
