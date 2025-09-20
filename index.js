@@ -1,3 +1,5 @@
+
+
 // const express = require('express');
 // const cors = require('cors');
 // const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -80,10 +82,10 @@
 
 
 
-const express = require("express");
-const cors = require("cors");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-require("dotenv").config();
+const express = require('express');
+const cors = require('cors');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -95,125 +97,96 @@ app.use(express.json());
 // MongoDB connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@omicronx.oj2lwua.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
+  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true },
 });
 
 async function run() {
   try {
     await client.connect();
-    const medicineCollection = client.db("mediCare").collection("medicine");
+    const medicineCollection = client.db('mediCare').collection('medicine');
+    const parcelCollection = client.db('mediCare').collection('parcels');
 
-    // ✅ Get all medicines (optionally filter by category)
-    app.get("/medicine", async (req, res) => {
+    // ==========================
+    // Get medicines (all / by category / by seller)
+    // ==========================
+    app.get('/medicine', async (req, res) => {
       try {
-        const category = req.query.category;
+        const { category, sellerEmail } = req.query;
         let query = {};
-        if (category) query = { category: category.toLowerCase() };
+
+        if (category) query.category = category.toLowerCase();
+        if (sellerEmail) query.sellerEmail = sellerEmail;
+
+        console.log("🔍 Medicine Query:", query);
+
         const result = await medicineCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
+        console.error("❌ Error in GET /medicine:", error);
         res.status(500).send({ error: error.message });
       }
     });
 
-    // ✅ Get all medicines by seller
-    app.get("/medicine/seller/:email", async (req, res) => {
+    // ==========================
+    // Get single medicine by MongoDB _id
+    // ==========================
+    app.get('/medicine/:id', async (req, res) => {
       try {
-        const email = req.params.email;
-        const result = await medicineCollection
-          .find({ sellerEmail: email })
-          .toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: error.message });
-      }
-    });
-
-    // ✅ Get single medicine by ID
-    app.get("/medicine/:id", async (req, res) => {
-      try {
-        const medicine = await medicineCollection.findOne({
-          _id: new ObjectId(req.params.id),
-        });
-        if (!medicine)
-          return res.status(404).send({ message: "Medicine not found" });
+        const medicine = await medicineCollection.findOne({ _id: new ObjectId(req.params.id) });
+        if (!medicine) return res.status(404).send({ message: 'Medicine not found' });
         res.send(medicine);
       } catch (error) {
-        res.status(500).send({ message: "Server error", error });
+        console.error("❌ Error in GET /medicine/:id:", error);
+        res.status(500).send({ message: 'Server error', error });
       }
     });
 
-    // ✅ Seller posts new medicine
-    app.post("/medicine", async (req, res) => {
+    // ==========================
+    // Add new medicine (posted by seller)
+    // ==========================
+    app.post('/medicine', async (req, res) => {
       try {
         const newMedicine = req.body;
+
         if (!newMedicine.sellerEmail) {
-          return res
-            .status(400)
-            .send({ message: "sellerEmail is required to post medicine" });
+          return res.status(400).send({ message: "sellerEmail is required" });
         }
+
         const result = await medicineCollection.insertOne(newMedicine);
-        res.send({ message: "Medicine added successfully", result });
+        console.log("✅ New medicine added by:", newMedicine.sellerEmail);
+        res.send(result);
       } catch (error) {
-        res.status(500).send({ message: error.message });
+        console.error("❌ Error in POST /medicine:", error);
+        res.status(500).send({ error: error.message });
       }
     });
 
-    // ✅ Update medicine (seller can only update his own medicine)
-    app.put("/medicine/:id", async (req, res) => {
+    // ==========================
+    // Parcels API
+    // ==========================
+    app.get('/parcels', async (req, res) => {
       try {
-        const { id } = req.params;
-        const { sellerEmail, ...updateData } = req.body;
-
-        if (!sellerEmail)
-          return res.status(400).send({ message: "sellerEmail required" });
-
-        const filter = { _id: new ObjectId(id), sellerEmail };
-        const updateDoc = { $set: updateData };
-
-        const result = await medicineCollection.updateOne(filter, updateDoc);
-
-        if (result.matchedCount === 0) {
-          return res
-            .status(403)
-            .send({ message: "Not authorized to update this medicine" });
-        }
-
-        res.send({ message: "Updated successfully", result });
+        const result = await parcelCollection.find().sort({ createdAt: -1 }).toArray();
+        res.send(result);
       } catch (error) {
-        res.status(500).send({ message: error.message });
+        console.error("❌ Error in GET /parcels:", error);
+        res.status(500).send({ error: error.message });
       }
     });
 
-    // ✅ Delete medicine (seller can only delete his own medicine)
-    app.delete("/medicine/:id", async (req, res) => {
+    app.post('/parcels', async (req, res) => {
       try {
-        const { id } = req.params;
-        const sellerEmail = req.query.email;
-
-        if (!sellerEmail)
-          return res.status(400).send({ message: "sellerEmail required" });
-
-        const filter = { _id: new ObjectId(id), sellerEmail };
-        const result = await medicineCollection.deleteOne(filter);
-
-        if (result.deletedCount === 0) {
-          return res
-            .status(403)
-            .send({ message: "Not authorized to delete this medicine" });
-        }
-
-        res.send({ message: "Deleted successfully", result });
+        const parcel = { ...req.body, createdAt: new Date() };
+        const result = await parcelCollection.insertOne(parcel);
+        console.log("✅ New parcel added");
+        res.send(result);
       } catch (error) {
-        res.status(500).send({ message: error.message });
+        console.error("❌ Error in POST /parcels:", error);
+        res.status(500).send({ error: error.message });
       }
     });
 
-    console.log("✅ MongoDB connected successfully!");
+    console.log('✅ MongoDB connected successfully!');
   } finally {
     // client will stay connected
   }
@@ -221,8 +194,6 @@ async function run() {
 
 run().catch(console.dir);
 
-// Root endpoint
-app.get("/", (req, res) => res.send("MediCare server is running ✅"));
+app.get('/', (req, res) => res.send('medicare server is running'));
 
-// Start server
 app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
