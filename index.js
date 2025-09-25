@@ -228,6 +228,88 @@ async function run() {
       }
     };
 
+
+    // Seller Applications Endpoint
+    app.post("/seller-applications", verifyToken, async (req, res) => {
+      try {
+        const sellerApplication = {
+          ...req.body,
+          status: 'pending',
+          appliedAt: new Date(),
+          reviewedAt: null,
+          reviewedBy: null,
+          notes: ''
+        };
+
+        const applicationsCollection = req.db.collection("sellerApplications");
+
+        // Check if user already has a pending application
+        const existingApplication = await applicationsCollection.findOne({
+          userEmail: req.user.email,
+          status: 'pending'
+        });
+
+        if (existingApplication) {
+          return res.status(400).json({
+            success: false,
+            message: "You already have a pending seller application"
+          });
+        }
+
+        const result = await applicationsCollection.insertOne(sellerApplication);
+
+        // Update user's application status
+        const usersCollection = req.db.collection("users");
+        await usersCollection.updateOne(
+          { email: req.user.email },
+          {
+            $set: {
+              hasPendingSellerApplication: true,
+              lastApplicationDate: new Date()
+            }
+          }
+        );
+
+        res.status(201).json({
+          success: true,
+          message: "Seller application submitted successfully",
+          data: { applicationId: result.insertedId }
+        });
+      } catch (error) {
+        console.error('Error submitting seller application:', error);
+        res.status(500).json({
+          success: false,
+          message: "Failed to submit application"
+        });
+      }
+    });
+
+    
+
+    // Get seller application status
+    app.get("/seller-applications/status", verifyToken, async (req, res) => {
+      try {
+        const applicationsCollection = req.db.collection("sellerApplications");
+        const application = await applicationsCollection.findOne({
+          userEmail: req.user.email
+        }, { sort: { appliedAt: -1 } });
+
+        res.json({
+          success: true,
+          data: application || null
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch application status"
+        });
+      }
+    });
+
+
+
+
+
     // verifySellerOrAdmin - ensures requester is either seller (and matches sellerEmail) or admin
     const verifySellerOrAdmin = async (req, res, next) => {
       try {
