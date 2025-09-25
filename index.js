@@ -150,9 +150,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Initialize Firebase Admin SDK
-// ⚠️ Make sure this file exists in your project root and is the correct service account JSON.
-// Example: ./firebase-admin.key.json
+
 const serviceAccount = require("./firebase-admin.key.json");
 
 admin.initializeApp({
